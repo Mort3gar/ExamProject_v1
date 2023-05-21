@@ -1,3 +1,3 @@
 user = "root"
-password = "password"
-dbName = "database name"
+password = "Djkmcrfz50!"
+dbName = "temp"

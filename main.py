@@ -1,11 +1,8 @@
-from sqlalchemy.orm import DeclarativeBase
-import sqlalchemy as sa
+from sqlalchemy import create_engine
+from datetime import datetime
 import config
-from TablesClasses import Base, Products, ProductsAvailability, Customers
+from TablesClasses import Base, Product, ProductAvailability, WeightProduct, PieceProduct, Customer, Shop, Sale
 from tabulate import tabulate
-
-from sqlalchemy import create_engine, ScalarResult
-import re
 
 engine = create_engine(f"mysql+pymysql://{config.user}:{config.password}@localhost/{config.dbName}", echo=False)
 
@@ -15,246 +12,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 
-
-def barcodeInp():
-    while True:
-        barcode = input("Enter barcode (13 digits): ")
-        if len(barcode) == 13 and barcode.isdigit():
-            return int(barcode)
-        else:
-            print("Error")
-
-
-def typeIntp():
-    types_ = ["piece", "weight"]
-    while True:
-        type_ = input("""1. Piece goods
-2. Goods by weight
-->""")
-        if type_ in ["1", "2"]:
-            return types_[int(type_) - 1]
-        else:
-            print("Must be 1 or 2")
-
-
-def digInp(outStr: str):
-    while True:
-        code = input(outStr)
-        if code.isdigit():
-            return int(code)
-        else:
-            print("Must be digits")
-
-
-def dateInp():
-    re_ = "(?:[1-9]|0[1-9]|1[0-9]|2[0-9]|3[0-1])(?:.|-)(?:[1-9]|0[1-9]|1[0-2])(?:.|-|)(?:20[0-9][0-9]|[0-9][0-9])"
-    while True:
-        date = input("Enter deadline date (DD.MM.YYYY): ")
-        if re.fullmatch(re_, date):
-            return date
-        else:
-            print("Error")
-
-
-def addProduct(barcode: int, code: int, name: str, packageWeight: int, type_: str, price: int):
+#  DeadlineDate=date(2020, 9, 30)
+def updateProductAvailability(sellAmount: int, id):
     with Session(engine) as session:
-        temp = Products(Barcode=barcode,
-                        Code=code,
-                        Name=name,
-                        PackageWeight=packageWeight,
-                        Type=type_,
-                        Price=price,
-                        )
-        session.add(temp)
-        session.commit()
-
-
-def addProductsAvailability(product_: Products, maxAmount_: int, deadlineDate_: str):
-    with Session(engine) as session:
-        temp = ProductsAvailability(productID = product_.id,
-                                    product = product_,
-                                    curAmount = maxAmount_,
-                                    maxAmount = maxAmount_,
-                                    DeadlineDate = deadlineDate_)
-        session.add(temp)
-        session.commit()
-
-
-def selectAllProductsAvailability():
-    with Session(engine) as session:
-        req = select(ProductsAvailability)
-        t = []
-        for item in session.scalars(req):
-            t.append(item)
-        return t
-
-
-def selectProduct(productID:int):
-    with Session(engine) as session:
-        return session.scalars(select(Products).where(Products.id == productID)).one()
-
-
-def productsAvailabilityMenu():
-    temp = selectAllProductsAvailability()
-    if len(temp) != 0:
-        n = 3
-        page = 1
-        pages = int(len(temp)/n)
-        if len(temp)%n != 0:
-            pages += 1
-
-        while True:
-            if len(temp) > n:
-                t_list = []
-                for i, item in enumerate(temp[n * (page - 1):n * page]):
-                    t_list.append([i+1]+str(selectProduct(item.productID)).split()+[item.curAmount, item.maxAmount, item.DeadlineDate])
-                    # print(i+1, selectProduct(item.productID), item.curAmount, item.maxAmount, item.DeadlineDate)
-                print(tabulate(t_list,
-                               headers=["№", "Barcode", "Code", "Name", "Package Weight", "Type", "Price", "CurAmount", "MaxAmount", "Deadline Date"]))
-                if page == 1:
-                    print("""1. Next page
-2. Choose product""")
-                elif page != pages:
-                    print("""1. Next page
-2. Prev page
-3. Choose product""")
-                else:
-                    print("""1. Prev page
-2. Choose product""")
-                choice = input("-> ")
-                if page == 1:
-                    if choice == "1":
-                        page += 1
-                    elif choice == "2":
-                        return productChoose(temp[n * (page - 1):n * page])
-                    else:
-                        print("Error")
-                elif page != pages:
-                    if choice == "1":
-                        page += 1
-                    elif choice == "2":
-                        page -= 1
-                    elif choice == "3":
-                        return productChoose(temp[n * (page - 1):n * page])
-                    else:
-                        print("Error")
-                else:
-                    if choice == "1":
-                        page -= 1
-                    elif choice == "2":
-                        return productChoose(temp[n * (page - 1):n * page])
-                    else:
-                        print("Error")
-            else:
-                for i, item in enumerate(temp):
-                    print(i + 1, selectProduct(item.productID), item)
-                print("Choose product")
-                return productChoose(temp)
-    else:
-        raise ValueError("There are no items in db")
-
-
-def selectAllProducts():
-    with Session(engine) as session:
-        req = select(Products)
-        t = []
-        for item in session.scalars(req):
-            t.append(item)
-        return t
-
-
-def productChoose(productsList: list):
-    while True:
-        choice = digInp("->")
-        if choice <= len(productsList):
-            return productsList[choice - 1]
-        else:
-            print("Error")
-
-
-def productsMenu():
-    temp = selectAllProducts()
-    if len(temp) != 0:
-        n = 3
-        page = 1
-        pages = int(len(temp) / n)
-        if len(temp) % n != 0:
-            pages += 1
-        while True:
-            if len(temp) > n:
-                t_list = []
-                for i, item in enumerate(temp[n * (page - 1):n * page]):
-                    t_list.append([i+1]+str(item).split())
-                    # print(i + 1, item)
-                print(tabulate(t_list,
-                               headers=["№", "Barcode", "Code", "Name", "Package Weight", "Type", "Price"]))
-                if page == 1:
-                    print("""1. Next page
-2. Choose product""")
-                elif page != pages:
-                    print("""1. Next page
-2. Prev page
-3. Choose product""")
-                else:
-                    print("""1. Prev page
-2. Choose product""")
-                choice = input("-> ")
-                if page == 1:
-                    if choice == "1":
-                        page += 1
-                    elif choice == "2":
-                        return productChoose(temp[n * (page - 1):n * page])
-                    else:
-                        print("Error")
-                elif page != pages:
-                    if choice == "1":
-                        page += 1
-                    elif choice == "2":
-                        page -= 1
-                    elif choice == "3":
-                        return productChoose(temp[n * (page - 1):n * page])
-                    else:
-                        print("Error")
-                else:
-                    if choice == "1":
-                        page -= 1
-                    elif choice == "2":
-                        return productChoose(temp[n * (page - 1):n * page])
-                    else:
-                        print("Error")
-            else:
-                for i, item in enumerate(temp):
-                    print(i + 1, item)
-                print("Choose product")
-                return productChoose(temp)
-
-    else:
-        raise ValueError("There are no items in db")
-
-
-def productSellAmount(productAvail: ProductsAvailability):
-    while True:
-        code = input("Enter the quantity of the product sold: ")
-        if code.isdigit() and int(code) <= productAvail.curAmount:
-            return int(code)
-        else:
-            print("Must be digits")
-
-
-def addCustomer(name_:str, cardID_:int, product_:ProductsAvailability, amount_:int):
-    with Session(engine) as session:
-        temp = Customers(name=name_,
-                         cardID=cardID_,
-                         product=selectProduct(product_.productID).id,
-                         productName=selectProduct(product_.productID).Name,
-                         amount=amount_)
-        session.add(temp)
-        session.commit()
-
-
-def updateProductsAvailability(sellAmount:int, product_):
-    with Session(engine) as session:
-        temp = session.scalars(select(ProductsAvailability).where(ProductsAvailability.id==product_.id)).one()
+        temp = session.scalars(select(ProductAvailability).where(ProductAvailability.id == id)).one()
         if temp.curAmount - sellAmount > 0:
             temp.curAmount -= sellAmount
         else:
@@ -262,117 +23,128 @@ def updateProductsAvailability(sellAmount:int, product_):
         session.commit()
 
 
-def showTable(tableName:str):
-    with Session(engine) as session:
-        if tableName == "products":
-            t = session.scalars(select(Products))
-            t_list = []
-            for item in t:
-                t_list.append(str(item).split())
-            print(tabulate(t_list,
-                           headers=["Barcode", "Code", "Name", "PackageWeight", "Type", "Price"],
-                           tablefmt='orgtbl'))
-        elif tableName == "productsAvailability":
-            t = session.scalars(select(ProductsAvailability))
-            t_list = []
-            for item in t:
-                t_list.append(str(item).split())
-            print(tabulate(t_list,
-                           headers=["productID", "Barcode", "Code", "Name", "PackageWeight", "Type", "Price", "curAmount", "maxAmount", "DeadlineDate"],
-                           tablefmt='orgtbl'))
-        elif tableName == "customers":
-            t = session.scalars(select(Customers))
-            t_list = []
-            for item in t:
-                t_list.append(str(item).split())
-            print(tabulate(t_list,
-                           headers=["name", "cardID", "productID", "productName", "Amount"],
-                           tablefmt='orgtbl'))
+with Session(engine) as session:
+    product1 = Product(barcode=1234567890123,
+                       code=34,
+                       name="Spaghetti",
+                       packageWeight=100,
+                       price=200
+                       )
+    piece1 = PieceProduct(productId=product1.id, product=product1)
 
+    product2 = Product(barcode=2134567890123,
+                       code=45,
+                       name="Rise",
+                       packageWeight=150,
+                       price=100
+                       )
+    piece2 = PieceProduct(productId=product2.id, product=product2)
 
+    product3 = Product(barcode=3124567890123,
+                       code=64,
+                       name="Buckwheat",
+                       packageWeight=0,
+                       price=30
+                       )
+    weight1 = WeightProduct(productId=product3.id, product=product3)
 
-if __name__ == "__main__":
-    userState = "main"
-    state = True
+    product4 = Product(barcode=4123567890123,
+                       code=91,
+                       name="Pancakes",
+                       packageWeight=300,
+                       price=300
+                       )
+    piece3 = PieceProduct(productId=product4.id, product=product4)
 
-    while state:
-        if userState == "main":
-            print("""
-1. Add new product
-2. New supply
-3. Sell product
-4. Show tables
-5. Exit
-""")
-            choice = input("-> ")
-            if choice == "1":
-                userState = "newProduct"
-            elif choice == "2":
-                userState = "newSupply"
-            elif choice == "3":
-                userState = "sell"
-            elif choice == "4":
-                userState = "tables"
-            elif choice == "5":
-                state = False
-            else:
-                print("Error")
-        elif userState == "newProduct":
-            # addProduct(1234567890123, 34, "Spaghetti", 100, "piece", 200)
-            # addProduct(2134567890123, 45, "Rise", 150, "piece", 100)
-            # addProduct(3124567890123, 64, "Buckwheat", 200, "piece", 50)
-            # addProduct(4123567890123, 91, "Pancakes", 300, "piece", 300)
-            barcode = barcodeInp()
-            code = digInp("Enter product group code (digits): ")
-            name = input("Enter product name: ")
-            type_ = typeIntp()
-            if type_ == "piece":
-                packageWeight = digInp("Enter package weight: ")
-            else:
-                packageWeight = 0
-            price = digInp("Enter product price: ")
-            addProduct(barcode, code, name, packageWeight, type_, price)
-            userState = "main"
-            showTable("products")
+    shop1 = Shop(address="Самара, проспект Кирова, 202")
+    shop2 = Shop(address="Самара, ул. Луначарского, 60")
 
-        elif userState == "newSupply":
-            product = None
-            try:
-                product = productsMenu()
-            except ValueError as e:
-                print(e)
+    prodAval1 = ProductAvailability(productID=product1.id,
+                                    product=product1,
+                                    curAmount=200,
+                                    deadlineDate=datetime(2023, 6, 18))
+    prodAval2 = ProductAvailability(productID=product2.id,
+                                    product=product2,
+                                    curAmount=150,
+                                    deadlineDate=datetime(2023, 7, 13)
+                                    )
+    prodAval3 = ProductAvailability(productID=product3.id,
+                                    product=product3,
+                                    curAmount=300,
+                                    deadlineDate=datetime(2023, 6, 5)
+                                    )
+    prodAval4 = ProductAvailability(productID=product4.id,
+                                    product=product4,
+                                    curAmount=50,
+                                    deadlineDate=datetime(2023, 10, 7)
+                                    )
+    prodAval5 = ProductAvailability(productID=product1.id,
+                                    product=product1,
+                                    curAmount=15,
+                                    deadlineDate=datetime(2023, 5, 31)
+                                    )
 
-            if product is not None:
-                maxAmount = digInp("Enter the amount of the received product: ")
-                deadlineDate = dateInp()
-                addProductsAvailability(product, maxAmount, deadlineDate)
+    customer1 = Customer(name="Иван Иванович", cardID=1234)
+    customer2 = Customer(name="Вася Пупкин", cardID=2154)
+    customer3 = Customer(name="Олег Петрович", cardID=9713)
 
-            userState = "main"
-            showTable("productsAvailability")
-        elif userState == "sell":
-            product = None
-            try:
-                product = productsAvailabilityMenu()
-            except ValueError as e:
-                print(e)
+    session.add_all([product1, piece1, product2, piece2, product3, weight1, product4, piece3,
+                     shop1, shop2, prodAval1, prodAval2, prodAval3, prodAval4, prodAval5,
+                     customer1, customer2, customer3])
+    session.commit()
 
-            if product is not None:
-                name = input("Enter customer`s name: ")
-                cardID = digInp("Enter customer`s card ID (4 digits): ")
-                amount = productSellAmount(product)
-                addCustomer(name, cardID, product, amount)
-                updateProductsAvailability(amount, product)
-            userState = "main"
-            showTable("customers")
-        elif "tables":
-            print("""1. Products
-2. Products availability
-3. Customers""")
-            choice = input("->")
-            if choice == "1":
-                showTable("products")
-            elif choice == "2":
-                showTable("productsAvailability")
-            elif choice == "3":
-                showTable("customers")
-            userState = "main"
+    print("Товары")
+    print(tabulate(
+        session.execute(select(Product.id,
+                               Product.barcode,
+                               Product.code,
+                               Product.name,
+                               Product.packageWeight,
+                               Product.price)).all(),
+        headers=["№", "Barcode", "Code", "Name", "Package Weight", "Price"]
+    ))
+    print("Товары на складах")
+    print(tabulate(
+        session.execute(select(ProductAvailability.id,
+                               ProductAvailability.productID,
+                               ProductAvailability.curAmount,
+                               ProductAvailability.deadlineDate
+                               ).join(Product)).all(),
+        headers=["№", "ProductId", "CurAmount", "DeadlineDate"]
+    ))
+
+    print("Магазины")
+    print(tabulate(
+        session.execute(select(Shop.id, Shop.address)).all(),
+        headers=["№", "Address"]
+    ))
+
+    print("Покупатели")
+    print(tabulate(
+        session.execute(select(Customer.id, Customer.name, Customer.cardID)).all(),
+        headers=["№", "Name", "CardID"]
+    ))
+
+    sale1 = Sale(customerId=customer1.id, customer=customer1,
+                 productId=product3.id, product=product3,
+                 amount=10, shopId=shop1.id, shop=shop1)
+    session.add(sale1)
+    session.commit()
+    print("Продажи")
+    print(tabulate(
+        session.execute(select(Sale.id, Sale.customerId, Sale.productId,
+                               Sale.amount, Sale.shopId).
+                        join(Customer).join(Product).join(Shop)).all(),
+        headers=["№", "CustomerId", "ProductId", "Amount", "ShopId"]))
+
+    updateProductAvailability(10, 1)
+with Session(engine) as session:
+    print("Товары на складах")
+    print(tabulate(
+        session.execute(select(ProductAvailability.id,
+                               ProductAvailability.productID,
+                               ProductAvailability.curAmount,
+                               ProductAvailability.deadlineDate
+                               ).join(Product)).all(),
+        headers=["№", "ProductId", "CurAmount", "DeadlineDate"]
+    ))
